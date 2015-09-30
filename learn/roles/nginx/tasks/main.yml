@@ -1,0 +1,7 @@
+---
+- name: Add nginx offical repo
+  apt_repository: repo='ppa:nginx/stable'
+- name: Install nginx
+  apt: name=nginx state=latest update_cache=yes
+- name: Make sure nginx running
+  service: name=nginx state=running

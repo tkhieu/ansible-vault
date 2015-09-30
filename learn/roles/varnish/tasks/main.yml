@@ -1,0 +1,15 @@
+---
+- name: Add ondrej/varnish repo
+  apt_repository: repo='ppa:ondrej/varnish'
+
+- name: Install Varnish
+  apt: name=varnish state=present update_cache=yes
+
+- name: Copy varnish configuration
+  template: src=varnish dest=/etc/default/varnish
+
+- name: Copy varnish vcl configuration
+  template: src=default.vcl dest=/etc/varnish/default.vcl
+
+- name: Start varnish
+  service: name=varnish state=started enabled=yes

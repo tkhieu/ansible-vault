@@ -1,0 +1,15 @@
+---
+  - hosts: web
+    remote_user: vagrant
+    sudo: True
+    tasks:
+      - name: Test connecton
+        ping:
+    roles:
+      # - nginx
+      # - php-fpm
+      # - memcache
+      # - varnish
+      # - config-nginx-php
+      # - mysql
+      - magento

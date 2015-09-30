@@ -1,0 +1,87 @@
+---
+# - name: Create Folder
+#   command: mkdir -p /srv/www/{{ server_hostname }}/public_html
+
+# - name: Download magento
+#   get_url: url=http://www.magentocommerce.com/downloads/assets/{{ magento_version }}/magento-{{ magento_version }}.tar.gz dest=/srv/www/{{ server_hostname }}/magento-{{ magento_version }}.tar.gz
+
+# - name: Download Sample
+#   get_url: url=http://www.magentocommerce.com/downloads/assets/{{ magento_sample_data_version }}/magento-sample-data-{{ magento_sample_data_version }}.tar.gz dest=/srv/www/{{ server_hostname }}/magento-sample-data-{{ magento_sample_data_version }}.tar.gz
+
+- name: Extract Magento
+  command: chdir=/srv/www/{{ server_hostname }} tar xvf magento-{{ magento_version }}.tar.gz
+
+- name: Extract Sample
+  command: chdir=/srv/www/{{ server_hostname }} tar xvf magento-sample-data-{{ magento_sample_data_version }}.tar.bz2
+
+- name: Move Media Sample
+  shell: chdir=/srv/www/{{ server_hostname }} rsync -av magento-sample-data-{{ magento_sample_data_version }}/media/* magento/media/
+
+- name: Move Magento to Root
+  shell: chdir=/srv/www/{{ server_hostname }} mv magento/* ./public_html
+
+- name: Create {{ group }} group
+  group: name={{ group }} state=present
+
+- name: Add user {{ user }}
+  user: name={{ user }} group={{ group }} home=/srv/www/{{ server_hostname }}
+
+- name: Change ownership of magento installation 1
+  file: path=/srv/www/{{ server_hostname }}/public_html owner=www-data group=www-data state=directory recurse=yes
+
+- name: Change ownership of magento installation 2
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html find . -type f -exec chmod 644 {} \;
+
+- name: Change ownership of magento installation 3
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html find . -type d -exec chmod 755 {} \;
+
+- name: Change ownership of magento installation 4
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html chmod o+w var app/etc
+
+- name: Change ownership of magento installation 5
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html chmod 550 mage
+
+- name: Change ownership of magento installation 6
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html chmod -R o+w media
+
+- name: Mage Setup
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html ./mage mage-setup .
+
+- name: Mage Stable State
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html ./mage config-set preferred_state stable
+
+- name: Install Core
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html ./mage install http://connect20.magentocommerce.com/community Mage_All_Latest --force
+
+- name: Make mage exacutable
+  shell: chmod +x /srv/www/{{ server_hostname }}/public_html/mage
+
+- name: Install PageCache by Varnish
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html ./mage install http://connect20.magentocommerce.com/community Varnish_Cache --force
+
+- name: Install Magento
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html php -f install.php -- --license_agreement_accepted "yes" --locale "en_US" --timezone "Asia/Saigon" --default_currency "VND" --db_host "{{ mysql_host }}" --db_name "{{ magento_db_name }}" --db_user "{{ magento_db_user }}" --db_pass "{{ magento_db_password }}" --url "{{ magento_domain }}" --skip_url_validation --use_rewrites "yes" --use_secure "no" --secure_base_url "" --use_secure_admin "no" --admin_firstname "{{ magento_admin_first }}" --admin_lastname "{{ magento_admin_last }}" --admin_email "{{ magento_admin_email }}" --admin_username "{{ magento_admin_user }}" --admin_password "{{ magento_admin_pass }}"
+
+- name: Install sample data
+  shell: chdir=/srv/www/{{ server_hostname }}/magento-sample-data-{{ magento_sample_data_version }} mysql -h {{ mysql_host }} -u {{ magento_db_user }} -p {{ magento_db_password }} {{ magento_db_name }} < magento_sample_data_for_{{ magento_sample_data_version }}.sql
+
+- name: Refresh Index
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html php -f shell/indexer.php reindexall
+
+- name: Remove TAR files
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html rm -rf magento-{{ magento_version }}.tar.gz magento-sample-data-{{magento_sample_data_version}}.tar.gz
+
+- name: Remove SQL and txt files
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html rm -rf *.sample *.txt data.sql
+
+- name: Remove Magento Folder and Sample Folder
+  shell: chdir=/srv/www/{{ server_hostname }}/public_html rm -rf magento/ magento-sample-data-{{magento_sample_data_version}}/
+
+- name: restart nginx
+  service: name=nginx state=restarted
+
+- name: restart php-fpm
+  service: name=php5-fpm state=restarted
+
+- name: restart Varnish
+  service: name=varnish state=restarted
